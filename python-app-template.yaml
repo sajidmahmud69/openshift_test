@@ -1,0 +1,88 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: python-app-template
+parameters:
+  - name: APP_NAME
+    value: my-python-app
+  - name: GIT_REPO
+    description: Git repository URL
+    required: true
+  - name: GIT_BRANCH
+    value: main
+objects:
+  - apiVersion: build.openshift.io/v1
+    kind: BuildConfig
+    metadata:
+      name: ${APP_NAME}
+    spec:
+      source:
+        git:
+          uri: ${GIT_REPO}
+          ref: ${GIT_BRANCH}
+      strategy:
+        sourceStrategy:
+          from:
+            kind: ImageStreamTag
+            name: python:3.11
+      output:
+        to:
+          kind: ImageStreamTag
+          name: ${APP_NAME}:latest
+
+  - apiVersion: image.openshift.io/v1
+    kind: ImageStream
+    metadata:
+      name: ${APP_NAME}
+
+  - apiVersion: apps.openshift.io/v1
+    kind: DeploymentConfig
+    metadata:
+      name: ${APP_NAME}
+    spec:
+      replicas: 1
+      selector:
+        app: ${APP_NAME}
+      template:
+        metadata:
+          labels:
+            app: ${APP_NAME}
+        spec:
+          containers:
+            - name: ${APP_NAME}
+              image: ""
+              imagePullPolicy: Always
+              ports:
+                - containerPort: 5000
+      triggers:
+        - type: ConfigChange
+        - type: ImageChange
+          imageChangeParams:
+            automatic: true
+            containerNames:
+              - ${APP_NAME}
+            from:
+              kind: ImageStreamTag
+              name: ${APP_NAME}:latest
+
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: ${APP_NAME}
+    spec:
+      selector:
+        app: ${APP_NAME}
+      ports:
+        - protocol: TCP
+          port: 80
+          targetPort: 5000
+
+  - apiVersion: route.openshift.io/v1
+    kind: Route
+    metadata:
+      name: ${APP_NAME}
+    spec:
+      to:
+        kind: Service
+        name: ${APP_NAME}
+
